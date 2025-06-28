@@ -1,5 +1,5 @@
 # Kalman Series Filter for IMU
 
-KF - Kalman Filter
-EKF - Extended Kalman Filter
-ESKF - Errror-State Kalman Filter
+KF - Kalman Filter <br>
+EKF - Extended Kalman Filter <br>
+ESKF - Errror-State Kalman Filter <br>
