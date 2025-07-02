@@ -16,11 +16,10 @@
 #include "imu_calibration.h"
 #include "kalman_filter.h"
 
-#define I2C_MASTER_SCL_IO   2                       /*!< gpio number for I2C master clock */
-#define I2C_MASTER_SDA_IO   1                       /*!< gpio number for I2C master data  */
-#define I2C_MASTER_NUM      I2C_NUM_0               /*!< I2C port number for master dev */
-#define I2C_MASTER_FREQ_HZ  400*1000                /*!< I2C master clock frequency */
-
+#define I2C_MASTER_SCL_IO 2           /*!< gpio number for I2C master clock */
+#define I2C_MASTER_SDA_IO 1           /*!< gpio number for I2C master data  */
+#define I2C_MASTER_NUM I2C_NUM_0      /*!< I2C port number for master dev */
+#define I2C_MASTER_FREQ_HZ 400 * 1000 /*!< I2C master clock frequency */
 
 static const char *TAG = "MPU6050";
 // static mpu6050_handle_t mpu6050 = NULL;
@@ -54,20 +53,20 @@ static void i2c_bus_init(void)
     ESP_LOGI(TAG, "i2c initialized ----------------------------------\n");
 }
 
-typedef struct 
+typedef struct
 {
     float x;
     float y;
     float z;
 } axis_data_t;
 
-typedef union 
+typedef union
 {
-    float       f_val;
-    uint8_t     byte_vals;
+    float f_val;
+    uint8_t byte_vals;
 } f_byte_union_t;
 
-typedef struct 
+typedef struct
 {
     float acc_x;
     float acc_y;
@@ -75,9 +74,8 @@ typedef struct
     float gyr_x;
     float gyr_y;
     float gyr_z;
-    float sample_interval;
+    float sample_interval;  // ms
 } imu_raw_data_t;
-
 
 float cal_velocity(float ax, float ay, float az, float stemp_time_ms)
 {
@@ -89,9 +87,10 @@ float cal_velocity(float ax, float ay, float az, float stemp_time_ms)
     return v_scale;
 }
 
-void vTaskFunction(void *pvParameters) {
+void vTaskFunction(void *pvParameters)
+{
     // 任务主体代码
-    imu_raw_data_t * imu_data = pvParameters;
+    imu_raw_data_t *imu_data = pvParameters;
     char str_buff[100];
     u8g2_ClearBuffer(&u8g2);
     u8g2_SetFontMode(&u8g2, 1);             /*字体模式选择*/
@@ -124,29 +123,40 @@ void vTaskFunction(void *pvParameters) {
 void imu_data_sample(void *pvParameters)
 {
     int64_t start_time = 0.0, end_time = 0.0, elapsed_time = 0.0;
-    imu_raw_data_t * imu_data = pvParameters;
+    imu_raw_data_t *imu_data = pvParameters;
     start_time = esp_timer_get_time(); // 获取时间（微秒）
     while (1)
     {
         imu660ra_get_acc();
         imu660ra_get_gyro();
-        imu_data->acc_x = imu660ra_get_acce_x();
-        imu_data->acc_y = imu660ra_get_acce_y();
-        imu_data->acc_z = imu660ra_get_acce_z();
+        float acce_x = imu660ra_acc_transition(imu660ra_acc_x);
+        float acce_y = imu660ra_acc_transition(imu660ra_acc_y);
+        float acce_z = imu660ra_acc_transition(imu660ra_acc_z);
+        imu_data->acc_x = -(acce_A[0][0] * acce_x + acce_A[0][1] * acce_y + acce_A[0][2] * acce_z - acce_bias[0][0]);
+        imu_data->acc_y = -(acce_A[1][0] * acce_x + acce_A[1][1] * acce_y + acce_A[1][2] * acce_z - acce_bias[1][0]);
+        imu_data->acc_z = -(acce_A[2][0] * acce_x + acce_A[2][1] * acce_y + acce_A[2][2] * acce_z - acce_bias[2][0]);
+
+        // imu_data->acc_x = imu660ra_get_acce_x();
+        // imu_data->acc_y = imu660ra_get_acce_y();
+        // imu_data->acc_z = imu660ra_get_acce_z();
         // printf("%f, %f, %f, ", imu_data->acc_x, imu_data->acc_y, imu_data->acc_z);
         imu_data->gyr_x = imu660ra_get_gyro_x();
         imu_data->gyr_y = imu660ra_get_gyro_y();
         imu_data->gyr_z = imu660ra_get_gyro_z();
         // printf("%f, %f, %f, ", imu_data->gyr_x, imu_data->gyr_y, imu_data->gyr_z);
-        kalman_filter(imu_data->acc_x, imu_data->acc_y, imu_data->acc_z, imu_data->gyr_x, imu_data->gyr_y, imu_data->gyr_z, imu_data->sample_interval * 1e-3);
+        float dt_s = imu_data->sample_interval * 1e-3; // ms to s
+        kalman_filter(imu_data->acc_x, imu_data->acc_y, imu_data->acc_z, imu_data->gyr_x, imu_data->gyr_y, imu_data->gyr_z, dt_s);
         eliminate_gravity_acceleration(imu_data->acc_x, imu_data->acc_y, imu_data->acc_z, theta_roll, theta_pitch);
+        velocity_x += dt_s * acce_cal_x;
+        velocity_y += dt_s * acce_cal_y;
+        velocity_z += dt_s * acce_cal_z;
         // printf("%f, %f, %f\n", th_r_posterior, th_p_posterior, th_y_posterior);
         // printf("%f, %f, %f, %f, %f, %f \n", th_r_posterior, th_p_posterior, th_y_posterior, th_r_sen, th_p_sen, th_y_sen);
         end_time = esp_timer_get_time();
         elapsed_time = end_time - start_time;
         imu_data->sample_interval = elapsed_time * 1e-3;
         start_time = esp_timer_get_time(); // 获取时间（微秒）
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 
@@ -179,23 +189,23 @@ void app_main(void)
     ESP_LOGI(TAG, "i2c driver initialized");
 
     ESP_LOGI(TAG, "imu660ra initializing ...");
-    while(1)
+    while (1)
     {
-        if(imu660ra_init(I2C_MASTER_NUM))
-            printf("\r\nIMU660RA init error.");                                 // IMU660RA 初始化失败
+        if (imu660ra_init(I2C_MASTER_NUM))
+            printf("\r\nIMU660RA init error."); // IMU660RA 初始化失败
         else
             break;
     }
     imu660ra_calibration();
     ESP_LOGI(TAG, "imu660ra initialized");
-    
+
     u8g2Init(&u8g2, I2C_MASTER_NUM);
     // char str_buff[100];
     imu_raw_data_t imu_data;
     // int64_t start_time, end_time, elapsed_time;
     ESP_LOGI(TAG, "thread initializing ...");
     BaseType_t xReturned;
-    TaskHandle_t xHandle_1 = NULL;
+    // TaskHandle_t xHandle_1 = NULL;
     TaskHandle_t xHandle_2 = NULL;
     // 屏幕显示进程
     // xReturned = xTaskCreate(vTaskFunction, "Task display", 4096, &imu_data, 1,&xHandle_1);
@@ -203,20 +213,58 @@ void app_main(void)
     //     printf("create task display\n");
     // }
     xReturned = xTaskCreate(imu_data_sample, "Task imu sampling", 3072, &imu_data, 2, &xHandle_2);
-    if(xReturned == pdPASS) {
+    if (xReturned == pdPASS)
+    {
         printf("create task imu sampling\n");
     }
     ESP_LOGI(TAG, "thread initialized");
     ESP_LOGI(TAG, "main loop start");
+    // float acce_A[3][3] = {
+    //     {1.000050, 0.000257, 0.000210},
+    //     {0.000257, 1.000965, 0.003950},
+    //     {0.000210, 0.003950, 1.001645}};
+    // float acce_bias[3][1] = {
+    //     {0.012272},
+    //     {-0.022023},
+    //     {0.003605}};
     while (1)
     {
-         printf("%f, %f, %f, %f, %f, %f\n", 
-                th_r_posterior, th_p_posterior, th_y_posterior, 
-                // th_r_sen, th_p_sen, th_y_sen,
-                acce_cal_x, acce_cal_y, acce_cal_z);
-                // velocity_x, velocity_y, velocity_z
+        // float acce_x = imu660ra_acc_transition(imu660ra_acc_x);
+        // float acce_y = imu660ra_acc_transition(imu660ra_acc_y);
+        // float acce_z = imu660ra_acc_transition(imu660ra_acc_z);
+        // float acce_cal_x = acce_A[0][0] * acce_x + acce_A[0][1] * acce_y + acce_A[0][2] * acce_z - acce_bias[0][0];
+        // float acce_cal_z = acce_A[2][0] * acce_x + acce_A[2][1] * acce_y + acce_A[2][2] * acce_z - acce_bias[2][0];
+        // float acce_cal_y = acce_A[1][0] * acce_x + acce_A[1][1] * acce_y + acce_A[1][2] * acce_z - acce_bias[1][0];
+
+        // float acce_cal_scale = sqrtf(pow(acce_cal_x, 2) + pow(acce_cal_y, 2) + pow(acce_cal_z, 2));
+        // printf("%f, %f, %f, %f\n",
+        //        acce_cal_x, acce_cal_y, acce_cal_z, acce_cal_scale);
+
+        // float acce_raw_scale = sqrtf(pow(imu_data.acc_x, 2) + pow(imu_data.acc_y, 2) + pow(imu_data.acc_z, 2));
+        // printf("%f, %f, %f, %f\n",
+        //        imu_data.acc_x, imu_data.acc_y, imu_data.acc_z, acce_raw_scale);
+
+        printf("%f, %f, %f, %f, %f, %f, %f, %f, %f \n",
+               theta_roll, theta_pitch, theta_yaw, 
+               R_p, P_r_prior, th_p_posterior, K_p, K_r, acce_scale_norm);
+
+        // printf("%f, %f, %f\n",
+        //        imu_data->gyr_x,
+        //        imu_data->gyr_y,
+        //        imu_data->gyr_z);
+
+        // printf("%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n",
+        //        th_r_posterior, th_p_posterior, th_y_posterior,
+        //        imu_data.acc_x, imu_data.acc_y, imu_data.acc_z,
+        //        acce_cal_x, acce_cal_y, acce_cal_z,
+        //         velocity_x, velocity_y, velocity_z);
+
+        // printf("%f, %f, %f, %f, %f, %f \n",
+        //        P_r_prior, P_p_prior, P_y_prior, 
+        //        P_r_posterior, P_p_posterior, P_y_posterior);
+        // velocity_x, velocity_y, velocity_z
+
+        fflush(stdout);
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
-
-

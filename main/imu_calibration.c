@@ -5,11 +5,20 @@
 
 #include "imu_calibration.h"
 
-#define IMU_CALIBRATION_ACCE_SAMPLE_NUM 400
-#define IMU_CALIBRATION_GYRO_SAMPLE_NUM 400
+#define IMU_CALIBRATION_ACCE_SAMPLE_NUM 100
+#define IMU_CALIBRATION_GYRO_SAMPLE_NUM 100
 float acce_scale = 0.994255;
 float gyro_offset_x = 0.047866, gyro_offset_y = 0.055945, gyro_offset_z = -0.047561;
 float acce_cal_x = 0.0, acce_cal_y = 0.0, acce_cal_z = 0.0;
+
+float acce_A[3][3] = {
+    {1.000050, 0.000257, 0.000210},
+    {0.000257, 1.000965, 0.003950},
+    {0.000210, 0.003950, 1.001645}};
+float acce_bias[3][1] = {
+    {0.012272},
+    {-0.022023},
+    {0.003605}};
 
 void calibrate_acce_scale()
 {
@@ -44,9 +53,9 @@ void calibrate_acce_scale()
 
 void eliminate_gravity_acceleration(float acce_x, float acce_y, float acce_z, float roll, float pitch)
 {
-    acce_cal_x = acce_x + G_ACCE * sin(pitch / 180.0 * M_PI);
-    acce_cal_y = acce_y - G_ACCE * cos(pitch / 180.0 * M_PI) * sin(roll / 180.0 * M_PI);
-    acce_cal_z = acce_z - G_ACCE * cos(pitch / 180.0 * M_PI) * cos(roll / 180.0 * M_PI);
+    acce_cal_x = G_ACCE * (acce_x + sin(pitch / 180.0 * M_PI));
+    acce_cal_y = G_ACCE * (acce_y - cos(pitch / 180.0 * M_PI) * sin(roll / 180.0 * M_PI));
+    acce_cal_z = G_ACCE * (acce_z - cos(pitch / 180.0 * M_PI) * cos(roll / 180.0 * M_PI));
 }
 
 void calibrate_gyro_zero_offest()
@@ -71,7 +80,7 @@ void calibrate_gyro_zero_offest()
         sum_x += gyrx;
         sum_y += gyry;
         sum_z += gyrz;
-        system_delay_ms(10);
+        system_delay_ms(2);
     }
     average_x = sum_x / IMU_CALIBRATION_GYRO_SAMPLE_NUM;
     average_y = sum_y / IMU_CALIBRATION_GYRO_SAMPLE_NUM;

@@ -20,5 +20,5 @@
     "freertos.h": "c",
     "esp_flash.h": "c"
   },
-  "idf.flashType": "JTAG"
+  "idf.flashType": "UART"
 }

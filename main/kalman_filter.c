@@ -6,9 +6,9 @@
 // float acce_x = 0.0, acce_y = 0.0, acce_z = 0.0;
 float th_p_sen = 0.0, th_r_sen = 0.0, th_y_sen = 0.0; 
 // 过程噪声协方差矩阵（扰动协方差矩阵）-> Gyro
-float Q_p = 0.1, Q_r = 0.1, Q_y = 0.1;
+float Q_p = 0.01, Q_r = 0.01, Q_y = 0.01;
 // 观测噪声协方差矩阵 -> Acce 
-float R_p = 100.0, R_r = 100.0, R_y = 100.0;
+float R_p = 10.0, R_r = 10.0, R_y = 10.0;
 // 状态协方差矩阵（误差协方差矩阵）
 float P_p_prior = 0.0, P_r_prior = 0.0, P_y_prior = 0.0;
 float P_p_posterior = 0.0, P_r_posterior = 0.0, P_y_posterior = 0.0;
@@ -73,8 +73,28 @@ void acce_to_roll(float acce_x, float acce_y, float acce_z)
     th_r_sen = atan2(acce_y, acce_z) / PI_VAL * 180.0;
 }
 
+float acce_scale_norm;
 void kalman_filter(float acce_x, float acce_y, float acce_z, float gyro_x, float gyro_y, float gyro_z, float dt)
 {
+    float acce_scale = sqrt(acce_x * acce_x + acce_y * acce_y + acce_z * acce_z);
+    // float K = 10000.0;
+    acce_scale_norm = fabs(acce_scale - 1.0);
+    if (acce_scale_norm > 0.02)
+    {
+        R_p = 10000;
+        R_r = 10000;
+    }
+    else
+    {
+        R_p = 10.0;
+        R_r = 10.0;
+    }
+    // R_p = 1000;
+    // R_r = 1000;
+
+    // R_p = 10.0 + K * acce_scale_norm;
+    // R_r = 10.0 + K * acce_scale_norm;
+
     acce_to_pitch(acce_x, acce_y, acce_z);
     acce_to_roll(acce_y, acce_y, acce_z);
     // float dt  = 0.01;
@@ -89,7 +109,16 @@ void kalman_filter(float acce_x, float acce_y, float acce_z, float gyro_x, float
     // 更新卡尔曼增益
     K_p = P_p_prior / (P_p_prior + R_p);
     K_r = P_r_prior / (P_r_prior + R_r);
-    
+    // if (acce_scale_norm > 0.01)
+    // {
+    //     K_p = 1.0;
+    //     K_r = 1.0;
+    // }
+    // else
+    // {
+    //     K_p = P_p_prior / (P_p_prior + R_p);
+    //     K_r = P_r_prior / (P_r_prior + R_r);
+    // }
     // 更新后验状态估计
     th_p_posterior = th_p_prior + K_p * (th_p_sen - th_p_prior);
     th_r_posterior = th_r_prior + K_r * (th_r_sen - th_r_prior);
@@ -104,9 +133,17 @@ void kalman_filter(float acce_x, float acce_y, float acce_z, float gyro_x, float
     theta_pitch = th_p_posterior;
     theta_roll  = th_r_posterior;
     theta_yaw   = th_y_posterior;
-
-    // velocity_x += velocity_x + dt *  acce_cal_x;
-    // velocity_y += velocity_y + dt *  acce_cal_y;
-    // velocity_z += velocity_z + dt *  acce_cal_z;
+    // if (acce_cal_x > 0.02 || acce_cal_x < -0.02)
+    // {
+    //     velocity_x = velocity_x + dt *  acce_cal_x;
+    // }
+    // if (acce_cal_y > 0.02 || acce_cal_y < -0.02)
+    // {
+    //     velocity_y = velocity_y + dt *  acce_cal_y;
+    // }
+    // if (acce_cal_z > 0.02 || acce_cal_z < -0.02)
+    // {
+    //     velocity_z = velocity_z + dt *  acce_cal_z;
+    // }
     return;
 }   
