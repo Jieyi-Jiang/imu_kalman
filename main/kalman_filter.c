@@ -8,7 +8,7 @@ float th_p_sen = 0.0, th_r_sen = 0.0, th_y_sen = 0.0;
 // 过程噪声协方差矩阵（扰动协方差矩阵）-> Gyro
 float Q_p = 0.01, Q_r = 0.01, Q_y = 0.01;
 // 观测噪声协方差矩阵 -> Acce 
-float R_p = 10.0, R_r = 10.0, R_y = 10.0;
+float R_p = 2.0, R_r = 2.0, R_y = .0;
 // 状态协方差矩阵（误差协方差矩阵）
 float P_p_prior = 0.0, P_r_prior = 0.0, P_y_prior = 0.0;
 float P_p_posterior = 0.0, P_r_posterior = 0.0, P_y_posterior = 0.0;
@@ -26,6 +26,19 @@ float K_p, K_r, K_y;
 // 速度积分值
 float velocity_x = 0.0, velocity_y = 0.0, velocity_z = 0.0;
 
+typedef struct {
+    float value;          // 当前值
+    float last_value;     // 上一个值
+    float alpha;          // 平滑系数，范围在0到1之间，越小越平滑
+} low_pass_filter_t;
+
+
+float low_pass_filter(low_pass_filter_t *filter, float new_value)
+{
+    filter->last_value = filter->value;
+    filter->value = filter->alpha * new_value + (1 - filter->alpha) * filter->last_value;
+    return filter->value;
+}
 
 float ragular_to_range_180(float angle)
 {
@@ -74,20 +87,63 @@ void acce_to_roll(float acce_x, float acce_y, float acce_z)
 }
 
 float acce_scale_norm;
+low_pass_filter_t acce_scale_norm_filter = {
+    .value = 0.0,
+    .last_value = 0.0,
+    .alpha = 0.3, // 平滑系数
+};
+
+low_pass_filter_t theta_pitch_filter = {
+    .value = 0.0,
+    .last_value = 0.0,
+    .alpha = 0.3, // 平滑系数
+};
+low_pass_filter_t theta_roll_filter = {
+    .value = 0.0,
+    .last_value = 0.0,
+    .alpha = 0.3, // 平滑系数
+};
+low_pass_filter_t theta_yaw_filter = {
+    .value = 0.0,
+    .last_value = 0.0,
+    .alpha = 0.3, // 平滑系数
+};
+
 void kalman_filter(float acce_x, float acce_y, float acce_z, float gyro_x, float gyro_y, float gyro_z, float dt)
 {
     float acce_scale = sqrt(acce_x * acce_x + acce_y * acce_y + acce_z * acce_z);
     // float K = 10000.0;
     acce_scale_norm = fabs(acce_scale - 1.0);
+    acce_scale_norm = low_pass_filter(&acce_scale_norm_filter, acce_scale_norm);
+    static int acce_scale_norm_cnt = 0;
     if (acce_scale_norm > 0.02)
     {
-        R_p = 10000;
-        R_r = 10000;
+        R_p = 1e9;
+        R_r = 1e9;
+        acce_scale_norm_cnt = 0;
     }
-    else
+    else if (acce_scale_norm > 0.01 && acce_scale_norm <= 0.02)
+    {
+        R_p = 1000.0;
+        R_r = 1000.0;
+        acce_scale_norm_cnt = 0;
+    }
+    else if (acce_scale_norm > 0.005 && acce_scale_norm <= 0.01)
     {
         R_p = 10.0;
         R_r = 10.0;
+        acce_scale_norm_cnt = 0;
+    }
+    else
+    {
+        acce_scale_norm_cnt += 1;
+    }
+
+    if (acce_scale_norm_cnt > 50)
+    {
+        acce_scale_norm_cnt = 0;
+        R_p = 2.0;
+        R_r = 2.0;
     }
     // R_p = 1000;
     // R_r = 1000;
@@ -130,6 +186,12 @@ void kalman_filter(float acce_x, float acce_y, float acce_z, float gyro_x, float
     // yaw 单纯用积分处理
     th_y_posterior = ragular_to_range_180(th_y_posterior + dt * gyro_z);
 
+    // theta_pitch = low_pass_filter(&theta_pitch_filter, th_p_posterior);
+    // theta_roll  = low_pass_filter(&theta_roll_filter, th_r_posterior);
+    // theta_yaw   = low_pass_filter(&theta_yaw_filter, th_y_posterior);
+    // th_p_posterior = theta_pitch;
+    // th_r_posterior = theta_roll;
+    // th_y_posterior = theta_yaw;
     theta_pitch = th_p_posterior;
     theta_roll  = th_r_posterior;
     theta_yaw   = th_y_posterior;

@@ -5,8 +5,8 @@
 
 #include "imu_calibration.h"
 
-#define IMU_CALIBRATION_ACCE_SAMPLE_NUM 100
-#define IMU_CALIBRATION_GYRO_SAMPLE_NUM 100
+#define IMU_CALIBRATION_ACCE_SAMPLE_NUM 400
+#define IMU_CALIBRATION_GYRO_SAMPLE_NUM 400
 float acce_scale = 0.994255;
 float gyro_offset_x = 0.047866, gyro_offset_y = 0.055945, gyro_offset_z = -0.047561;
 float acce_cal_x = 0.0, acce_cal_y = 0.0, acce_cal_z = 0.0;

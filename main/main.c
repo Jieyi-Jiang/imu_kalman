@@ -127,6 +127,10 @@ void imu_data_sample(void *pvParameters)
     start_time = esp_timer_get_time(); // 获取时间（微秒）
     while (1)
     {
+        end_time = esp_timer_get_time();
+        elapsed_time = end_time - start_time;
+        start_time = esp_timer_get_time(); // 获取时间（微秒）
+        imu_data->sample_interval = elapsed_time * 1e-3;
         imu660ra_get_acc();
         imu660ra_get_gyro();
         float acce_x = imu660ra_acc_transition(imu660ra_acc_x);
@@ -152,10 +156,6 @@ void imu_data_sample(void *pvParameters)
         velocity_z += dt_s * acce_cal_z;
         // printf("%f, %f, %f\n", th_r_posterior, th_p_posterior, th_y_posterior);
         // printf("%f, %f, %f, %f, %f, %f \n", th_r_posterior, th_p_posterior, th_y_posterior, th_r_sen, th_p_sen, th_y_sen);
-        end_time = esp_timer_get_time();
-        elapsed_time = end_time - start_time;
-        imu_data->sample_interval = elapsed_time * 1e-3;
-        start_time = esp_timer_get_time(); // 获取时间（微秒）
         vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
@@ -244,9 +244,12 @@ void app_main(void)
         // printf("%f, %f, %f, %f\n",
         //        imu_data.acc_x, imu_data.acc_y, imu_data.acc_z, acce_raw_scale);
 
-        printf("%f, %f, %f, %f, %f, %f, %f, %f, %f \n",
-               theta_roll, theta_pitch, theta_yaw, 
-               R_p, P_r_prior, th_p_posterior, K_p, K_r, acce_scale_norm);
+        printf("%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n",
+                theta_roll, theta_pitch,    theta_yaw, 
+                th_r_sen,   th_p_sen,       th_y_sen,
+                R_p,        P_r_prior,      P_r_posterior, 
+                K_p,        K_r,            acce_scale_norm,
+                imu_data.sample_interval);
 
         // printf("%f, %f, %f\n",
         //        imu_data->gyr_x,
