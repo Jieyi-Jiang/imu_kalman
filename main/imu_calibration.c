@@ -4,6 +4,7 @@
 #include "freertos/task.h"
 
 #include "imu_calibration.h"
+#include "kalman_filter.h"
 
 #define IMU_CALIBRATION_ACCE_SAMPLE_NUM 400
 #define IMU_CALIBRATION_GYRO_SAMPLE_NUM 400
@@ -51,11 +52,30 @@ void calibrate_acce_scale()
     printf("acce_scale = %f\n", acce_scale);
 }
 
+low_pass_filter_t acce_cal_x_filter = {
+    .value = 0.0,
+    .last_value = 0.0,
+    .alpha = 0.5, // 平滑系数
+};
+low_pass_filter_t acce_cal_y_filter = {
+    .value = 0.0,
+    .last_value = 0.0,
+    .alpha = 0.5, // 平滑系数
+};
+low_pass_filter_t acce_cal_z_filter = {
+    .value = 0.0,
+    .last_value = 0.0,
+    .alpha = 0.5, // 平滑系数
+};
 void eliminate_gravity_acceleration(float acce_x, float acce_y, float acce_z, float roll, float pitch)
 {
     acce_cal_x = G_ACCE * (acce_x + sin(pitch / 180.0 * M_PI));
     acce_cal_y = G_ACCE * (acce_y - cos(pitch / 180.0 * M_PI) * sin(roll / 180.0 * M_PI));
     acce_cal_z = G_ACCE * (acce_z - cos(pitch / 180.0 * M_PI) * cos(roll / 180.0 * M_PI));
+    acce_cal_x = low_pass_filter(&acce_cal_x_filter, acce_cal_x);
+    acce_cal_y = low_pass_filter(&acce_cal_y_filter, acce_cal_y);
+    acce_cal_z = low_pass_filter(&acce_cal_z_filter, acce_cal_z);
+    // printf("acce_cal_x = %f, acce_cal_y = %f,
 }
 
 void calibrate_gyro_zero_offest()
