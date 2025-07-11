@@ -26,12 +26,6 @@ float K_p, K_r, K_y;
 // 速度积分值
 float velocity_x = 0.0, velocity_y = 0.0, velocity_z = 0.0;
 
-typedef struct {
-    float value;          // 当前值
-    float last_value;     // 上一个值
-    float alpha;          // 平滑系数，范围在0到1之间，越小越平滑
-} low_pass_filter_t;
-
 
 float low_pass_filter(low_pass_filter_t *filter, float new_value)
 {
@@ -96,19 +90,18 @@ low_pass_filter_t acce_scale_norm_filter = {
 low_pass_filter_t theta_pitch_filter = {
     .value = 0.0,
     .last_value = 0.0,
-    .alpha = 0.3, // 平滑系数
+    .alpha = 0.4, // 平滑系数
 };
 low_pass_filter_t theta_roll_filter = {
     .value = 0.0,
     .last_value = 0.0,
-    .alpha = 0.3, // 平滑系数
+    .alpha = 0.4, // 平滑系数
 };
 low_pass_filter_t theta_yaw_filter = {
     .value = 0.0,
     .last_value = 0.0,
-    .alpha = 0.3, // 平滑系数
+    .alpha = 0.4, // 平滑系数
 };
-
 void kalman_filter(float acce_x, float acce_y, float acce_z, float gyro_x, float gyro_y, float gyro_z, float dt)
 {
     float acce_scale = sqrt(acce_x * acce_x + acce_y * acce_y + acce_z * acce_z);
@@ -116,16 +109,22 @@ void kalman_filter(float acce_x, float acce_y, float acce_z, float gyro_x, float
     acce_scale_norm = fabs(acce_scale - 1.0);
     acce_scale_norm = low_pass_filter(&acce_scale_norm_filter, acce_scale_norm);
     static int acce_scale_norm_cnt = 0;
-    if (acce_scale_norm > 0.02)
+    if (acce_scale_norm > 0.1)
     {
-        R_p = 1e9;
-        R_r = 1e9;
+        R_p = 1e20;
+        R_r = 1e20;
+        acce_scale_norm_cnt = 0;
+    }
+    if (acce_scale_norm > 0.02 && acce_scale_norm <= 0.1)
+    {
+        R_p = 1e10;
+        R_r = 1e10;
         acce_scale_norm_cnt = 0;
     }
     else if (acce_scale_norm > 0.01 && acce_scale_norm <= 0.02)
     {
-        R_p = 1000.0;
-        R_r = 1000.0;
+        R_p = 1e5;
+        R_r = 1e5;
         acce_scale_norm_cnt = 0;
     }
     else if (acce_scale_norm > 0.005 && acce_scale_norm <= 0.01)
@@ -159,8 +158,8 @@ void kalman_filter(float acce_x, float acce_y, float acce_z, float gyro_x, float
     P_r_prior = P_r_posterior + Q_r;
     
     // 更新先验状态估计
-    th_p_prior = bound_to_90(th_p_posterior + dt * gyro_y);
     th_r_prior = ragular_to_range_180(th_r_posterior + dt * gyro_x);
+    th_p_prior = bound_to_90(th_p_posterior + dt * gyro_y);
     
     // 更新卡尔曼增益
     K_p = P_p_prior / (P_p_prior + R_p);
@@ -186,15 +185,15 @@ void kalman_filter(float acce_x, float acce_y, float acce_z, float gyro_x, float
     // yaw 单纯用积分处理
     th_y_posterior = ragular_to_range_180(th_y_posterior + dt * gyro_z);
 
-    // theta_pitch = low_pass_filter(&theta_pitch_filter, th_p_posterior);
-    // theta_roll  = low_pass_filter(&theta_roll_filter, th_r_posterior);
-    // theta_yaw   = low_pass_filter(&theta_yaw_filter, th_y_posterior);
+    theta_pitch = low_pass_filter(&theta_pitch_filter, th_p_posterior);
+    theta_roll  = low_pass_filter(&theta_roll_filter, th_r_posterior);
+    theta_yaw   = low_pass_filter(&theta_yaw_filter, th_y_posterior);
     // th_p_posterior = theta_pitch;
     // th_r_posterior = theta_roll;
     // th_y_posterior = theta_yaw;
-    theta_pitch = th_p_posterior;
-    theta_roll  = th_r_posterior;
-    theta_yaw   = th_y_posterior;
+    // theta_pitch = th_p_posterior;
+    // theta_roll  = th_r_posterior;
+    // theta_yaw   = th_y_posterior;
     // if (acce_cal_x > 0.02 || acce_cal_x < -0.02)
     // {
     //     velocity_x = velocity_x + dt *  acce_cal_x;

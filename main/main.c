@@ -244,12 +244,12 @@ void app_main(void)
         // printf("%f, %f, %f, %f\n",
         //        imu_data.acc_x, imu_data.acc_y, imu_data.acc_z, acce_raw_scale);
 
-        printf("%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n",
-                theta_roll, theta_pitch,    theta_yaw, 
-                th_r_sen,   th_p_sen,       th_y_sen,
-                R_p,        P_r_prior,      P_r_posterior, 
-                K_p,        K_r,            acce_scale_norm,
-                imu_data.sample_interval);
+        // printf("%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n",
+        //         theta_roll, theta_pitch,    theta_yaw,
+        //         th_r_sen,   th_p_sen,       th_y_sen,
+        //         R_p,        P_r_prior,      P_r_posterior,
+        //         K_p,        K_r,            acce_scale_norm,
+        //         imu_data.sample_interval);
 
         // printf("%f, %f, %f\n",
         //        imu_data->gyr_x,
@@ -262,10 +262,10 @@ void app_main(void)
         //        acce_cal_x, acce_cal_y, acce_cal_z,
         //         velocity_x, velocity_y, velocity_z);
 
-        // printf("%f, %f, %f, %f, %f, %f \n",
-        //        P_r_prior, P_p_prior, P_y_prior, 
-        //        P_r_posterior, P_p_posterior, P_y_posterior);
-        // velocity_x, velocity_y, velocity_z
+        printf("%f, %f, %f, %f, %f, %f, %f, %f, %f \n",
+                theta_roll,     theta_pitch,    theta_yaw,
+                acce_cal_x,     acce_cal_y,     acce_cal_z,
+                velocity_x,     velocity_y,     velocity_z);
 
         fflush(stdout);
         vTaskDelay(pdMS_TO_TICKS(10));
